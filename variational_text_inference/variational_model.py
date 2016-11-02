@@ -20,12 +20,17 @@ class Variational_Document_Model(object):
     
     def __init__(self, the_sess , input_dim , hidden_dim , encoder_hidden_dim = [] , generator_hidden_dim = [] , batch_size = 100 ,
                  initializer=tf.random_normal,transfer_fct = tf.nn.relu , output_activation = tf.nn.sigmoid,
-                 learning_rate = 0.001 , mode = 'gather'):
+                 learning_rate = 0.001 , mode = 'gather' , negative_sampling_loss = False):
         
         self.transfer_fct = transfer_fct
         self.output_activation = output_activation
-        
         self.mode = mode
+
+        if negative_sampling_loss:
+            self.negative_sampling_loss = True
+            self.output_activation = tf.nn.sigmoid
+            self.mode = 'negative'
+        
         
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -157,6 +162,10 @@ class Variational_Document_Model(object):
             
 #             x_reconstr_mean = self.output_activation(tf.add(-1*(tf.matmul(generator_results['res_{}'.format(i)], weights['out_mean'])), 
 #                                  biases['out_mean']))
+            if self.mode == 'negative':
+                x_reconstr_mean = tf.add(-1*(tf.matmul(self.z, weights['out_mean'])), 
+                                 biases['out_mean'])
+                return x_reconstr_mean
 
             x_reconstr_mean = self.output_activation(tf.add(-1*(tf.matmul(self.z, weights['out_mean'])), 
                                  biases['out_mean']))
@@ -173,8 +182,9 @@ class Variational_Document_Model(object):
         #     is given.
         # Adding 1e-10 to avoid evaluatio of log(0.0)
         
-        if self.mode != 'gather':
-            self.log_recons = tf.log(self.X_reconstruction_mean + 1e-10)
+        if self.mode == 'negative':
+            self.negative_loss = self.output_activation(self.X_reconstruction_mean * self.mask)
+            self.log_recons = tf.log(self.negative_loss + 1e-10)
             self.reconstr_loss = reconstr_loss = -tf.reduce_sum(self.log_recons*self.mask)
         if self.mode == 'gather':
             ####### Collecting the indexes as in Bag of Words
@@ -247,11 +257,10 @@ class Variational_Document_Model(object):
                              feed_dict={self.x: X})
     
     
-    def save(self, checkpoint_dir , global_step=None):
-
+    def save(self, checkpoint_dir = os.getcwd() , model_dir = 'save_my_model' , global_step=None):
         print(" [*] Saving checkpoints...")
         model_name = type(self).__name__
-        model_dir = self.__class__.__name__
+        
 
         checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
         if not os.path.exists(checkpoint_dir):
@@ -260,10 +269,9 @@ class Variational_Document_Model(object):
             os.path.join(checkpoint_dir, model_name), global_step=global_step)
         print "Saved in {}".format(checkpoint_dir)
         
-    def load(self, checkpoint_dir ):
+    def load(self,  checkpoint_dir = os.getcwd() , model_dir = 'save_my_model' ):
 
         print(" [*] Loading checkpoints...")
-        model_dir = '20_news'
         print "Model dir is {}".format(model_dir)
         checkpoint_dir = os.path.join(checkpoint_dir, model_dir)
 

@@ -20,9 +20,53 @@ def xavier_init(fan_in , fan_out, constant=1):
     return tf.random_uniform((fan_in, fan_out), 
                              minval=low, maxval=high, 
                              dtype=tf.float32)
+def train_the_model(vae):
+    vae._train()
+    # Training cycle
+    training_epochs = 201
+    batch_size = 100
+    n_samples = len(data_)
+    display_step = 1
+    save_step = 100
+    for epoch in range(training_epochs):
+        batch_data = A.get_batch(batch_size)
+        avg_cost = 0.
+        total_batch = int(n_samples / batch_size)
+        # Loop over all batches
+        batch_id = 0
+        for batch_ in batch_data:
 
+            collected_data = [chunks for chunks in batch_]
+            ##### Here batch_xs ( Bag of words with count of words)
+            ##### Here mask_xs  ( Bag of words with 1 at the index of words in doc , no counts)
+            ##### Here mask_negative is not using ( Tried with negative sampling )
+            batch_xs , mask_xs , mask_negative  = A._bag_of_words(collected_data)
+            ###### Here batch_flattened gives position of words in all documents into one array
+            ###### because gather_nd does not support gradients . So , we have to use tf.gather
+            batch_flattened = np.ravel(batch_xs)
+
+            # Fit training using batch data
+            if vae.mode == 'gather':
+                index_positions = np.where( batch_flattened > 0 )[0] ####### We want locs where , data ( word ) present in document 
+                cost , R_loss_  = vae.partial_fit(find_norm(batch_xs) , batch_xs.shape[0] , index_positions)
+            else:
+                cost , R_loss_  = vae.partial_fit(find_norm(batch_xs) , batch_xs.shape[0] , mask_negative.astype(np.float32))
+
+            avg_cost += cost
+            print "Cost {} epoch is {}".format(cost, epoch)
+        # Display logs per epoch step
+        if epoch % display_step == 0:
+            print "Epoch:", '%04d' % (epoch+1), \
+                  "cost=", "{:.9f}".format(avg_cost/total_batch)
+
+        if epoch % save_step == 0:
+            vae.save(global_step = epoch)
+
+    return vae
 
 if __name__ == "__main__":
+
+
 
 
     from sklearn.datasets import fetch_20newsgroups
@@ -31,51 +75,16 @@ if __name__ == "__main__":
     print "Download 20 news group data completed"
     A = TextLoader(data_)
     batch_size = 100
+        # restricting memory usage, TensorFlow is greedy and will use all memory otherwise
+    gpu_opts = tf.GPUOptions(per_process_gpu_memory_fraction=0.6)
+    # initialize the Session
 
-    with tf.Session() as sess:
+    with tf.Session(config=tf.ConfigProto(gpu_options=gpu_opts)) as sess:
+        mode = 'negative'
         vae = Variational_Document_Model(sess , len(A.vocab), 50, [500 , 500] ,  
                          transfer_fct=tf.nn.relu , output_activation=tf.nn.softmax,
-                         batch_size=100, initializer=xavier_init , mode = 'gather'   )
+                         batch_size=100, initializer=xavier_init , mode = mode ,negative_sampling_loss =True  )
+
+        Model = train_the_model(vae)
             
-        vae._train()
-        # Training cycle
-        training_epochs = 501
-        batch_size = 100
-        n_samples = len(data_)
-        display_step = 1
-        save_step = 100
-        for epoch in range(training_epochs):
-            batch_data = A.get_batch(batch_size)
-            avg_cost = 0.
-            total_batch = int(n_samples / batch_size)
-            # Loop over all batches
-            batch_id = 0
-            for batch_ in batch_data:
-
-                collected_data = [chunks for chunks in batch_]
-                ##### Here batch_xs ( Bag of words with count of words)
-                ##### Here mask_xs  ( Bag of words with 1 at the index of words in doc , no counts)
-                ##### Here mask_negative is not using ( Tried with negative sampling )
-                batch_xs , mask_xs , mask_negative  = A._bag_of_words(collected_data)
-                ###### Here batch_flattened gives position of words in all documents into one array
-                ###### because gather_nd does not support gradients . So , we have to use tf.gather
-                batch_flattened = np.ravel(batch_xs)
-                index_positions = np.where( batch_flattened > 0 )[0] ####### We want locs where , data ( word ) present in document 
-
-                # Fit training using batch data
-                if vae.mode == 'gather':
-                    
-                    cost , R_loss_  = vae.partial_fit(find_norm(batch_xs) , batch_xs.shape[0] , index_positions)
-                else:
-                    cost , R_loss_  = vae.partial_fit(mask_xs , batch_xs.shape[0] , mask_xs.astype(np.float32))
-
-                avg_cost += cost
-                print "Cost {} is".format(cost)
-                
-            # Display logs per epoch step
-            if epoch % display_step == 0:
-                print "Epoch:", '%04d' % (epoch+1), \
-                      "cost=", "{:.9f}".format(avg_cost/total_batch)
-
-            if epoch % save_step == 0:
-                vae.save(global_step = epoch)
+        

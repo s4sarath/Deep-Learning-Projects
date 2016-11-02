@@ -41,11 +41,16 @@ class TextLoader():
 
     def _vocab(self , chunks ):
         
+        count = 0
+        self.data_index = []
         for text_ in iter(self.data):
             preprocessed = self._preprocess(text_)
-            for w in list(set(preprocessed)):
-                if w not in self.vocab:
-                    self.vocab[w] = len(self.vocab) 
+            if preprocessed:
+                self.data_index.append(count)
+                count += 1
+                for w in list(set(preprocessed)):
+                    if w not in self.vocab:
+                        self.vocab[w] = len(self.vocab) 
         
 
     def _vocab_inverse(self):
@@ -83,19 +88,12 @@ class TextLoader():
         
         voc_to_idx = []
         preprocessed_data = map(self._preprocess, chunk_data)
-        preprocessed_data_ = []
-        self.data_index = []
-        for index_pos , data_ in enumerate(preprocessed_data):
-            if data_:
-                preprocessed_data_.append(data_)
-                self.data_index.append(index_pos) ######### After pre-processing some values might be null , so to get proper index of not-null values of data , we are keeping track of the index
-        for chunks in preprocessed_data_:
-            voc_to_temp = [self.vocab[w] for w in chunks if w in self.vocab]
-            voc_to_idx.append(voc_to_temp)
+        
+        for chunks in preprocessed_data:
+            if chunks:
+                voc_to_temp = [self.vocab[w] for w in chunks if w in self.vocab]
+                voc_to_idx.append(voc_to_temp)
         voc_to_idx = np.array(voc_to_idx)
-        ############ Setting to empyt to list to free up memory ( I am not sure whether it is right , I guess so )
-        preprocessed_data_ = []
-        preprocessed_data_ = []
         return voc_to_idx
                 
 
