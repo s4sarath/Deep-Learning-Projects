@@ -1,6 +1,6 @@
 from preprocess import pre_process_sentence
 import numpy as np
-
+from numpy import random
 
 from itertools import islice, chain
 
@@ -38,6 +38,29 @@ class TextLoader():
             yield chain([batch_data.next()], batch_data)
             
 
+    def make_cum_table(self, power=0.75, domain=2**31 - 1):
+        """
+        Create a cumulative-distribution table using stored vocabulary word counts for
+        drawing random words in the negative-sampling training routines.
+
+        To draw a word index, choose a random integer up to the maximum value in the
+        table (cum_table[-1]), then finding that integer's sorted insertion point
+        (as if by bisect_left or ndarray.searchsorted()). That insertion point is the
+        drawn index, coming up in proportion equal to the increment at that slot.
+
+        Called internally from 'build_vocab()'.
+        """
+        vocab_size = len(self.index2word)
+        self.cum_table = np.zeros(vocab_size, dtype=uint32)
+        # compute sum of all power (Z in paper)
+        train_words_pow = float(sum([self.vocab[word].count**power for word in self.vocab]))
+        cumulative = 0.0
+        for word_index in range(vocab_size):
+            cumulative += self.vocab[self.index2word[word_index]].count**power / train_words_pow
+            self.cum_table[word_index] = round(cumulative * domain)
+        if len(self.cum_table) > 0:
+            assert self.cum_table[-1] == domain
+
 
     def _vocab(self , chunks ):
         
@@ -56,6 +79,7 @@ class TextLoader():
     def _vocab_inverse(self):
 
         self.vocab_inverse = {k:v for v, k in self.vocab.iteritems()}
+        self.index2word = self.vocab_inverse
 
     def _bag_of_words(self , chunk_data , vocab_size = None):
         

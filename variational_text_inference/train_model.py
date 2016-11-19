@@ -3,9 +3,9 @@ from text_loader_utils import TextLoader
 import cPickle
 import numpy as np
 import tensorflow as tf
-from variational_model import Variational_Document_Model
-import os
+from variational_model import NVDM
 from vector_utils import find_norm
+from tf_common_utils import load_model , save_model
 
 np.random.seed(0)
 tf.set_random_seed(0)
@@ -21,7 +21,14 @@ def xavier_init(fan_in , fan_out, constant=1):
                              minval=low, maxval=high, 
                              dtype=tf.float32)
 def train_the_model(vae):
-    vae._train()
+    vae.start_the_model()
+
+    try:
+        status = load_model(vae)
+        if status:
+            print "Restore previously saved model succesfully"
+    except: 
+        pass
     # Training cycle
     training_epochs = 201
     batch_size = 100
@@ -30,43 +37,38 @@ def train_the_model(vae):
     save_step = 100
     for epoch in range(training_epochs):
         batch_data = A.get_batch(batch_size)
-        avg_cost = 0.
+        loss_sum = 0.
+        kld_sum = 0.
         total_batch = int(n_samples / batch_size)
         # Loop over all batches
         batch_id = 0
         for batch_ in batch_data:
-
+            batch_id += 1
             collected_data = [chunks for chunks in batch_]
-            ##### Here batch_xs ( Bag of words with count of words)
-            ##### Here mask_xs  ( Bag of words with 1 at the index of words in doc , no counts)
-            ##### Here mask_negative is not using ( Tried with negative sampling )
             batch_xs , mask_xs , mask_negative  = A._bag_of_words(collected_data)
-            ###### Here batch_flattened gives position of words in all documents into one array
-            ###### because gather_nd does not support gradients . So , we have to use tf.gather
-            batch_flattened = np.ravel(batch_xs)
+            _ , total_cost , recons_loss_ , kld  = vae.partial_fit(batch_xs , batch_xs.shape[0] , mask_xs)
 
-            # Fit training using batch data
-            if vae.mode == 'gather':
-                index_positions = np.where( batch_flattened > 0 )[0] ####### We want locs where , data ( word ) present in document 
-                cost , R_loss_  = vae.partial_fit(find_norm(batch_xs) , batch_xs.shape[0] , index_positions)
-            else:
-                cost , R_loss_  = vae.partial_fit(find_norm(batch_xs) , batch_xs.shape[0] , mask_negative.astype(np.float32))
+            word_count = np.sum(mask_xs)
+            batch_loss = np.sum(total_cost)/word_count
+            loss_sum += batch_loss
+            kld_sum += np.sum(kld)
+            
 
-            avg_cost += cost
-            print "Cost {} epoch is {}".format(cost, epoch)
-        # Display logs per epoch step
-        if epoch % display_step == 0:
-            print "Epoch:", '%04d' % (epoch+1), \
-                  "cost=", "{:.9f}".format(avg_cost/total_batch)
-
+            print ("Batch Id {} , Loss {} , Kld is {}  ".format(batch_id , batch_loss, np.sum(kld)))
+            print ("Loss sum" , loss_sum)
+            print ("Kld " , kld_sum/total_batch)
+        break
+        print_ppx = loss_sum
+        print_kld = kld_sum/total_batch
+        print('| Epoch train: {:d} |'.format(epoch+1), 
+               '| Perplexity: {:.5f}'.format(print_ppx),
+               '| KLD: {:.5}'.format(print_kld))
         if epoch % save_step == 0:
-            vae.save(global_step = epoch)
+            save_model(vae , model_name =  type(vae).__name__ , global_step = epoch)
 
     return vae
 
 if __name__ == "__main__":
-
-
 
 
     from sklearn.datasets import fetch_20newsgroups
@@ -81,9 +83,9 @@ if __name__ == "__main__":
 
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_opts)) as sess:
         mode = 'negative'
-        vae = Variational_Document_Model(sess , len(A.vocab), 50, [500 , 500] ,  
+        vae = NVDM(sess , len(A.vocab), 50, [500 , 500] ,  
                          transfer_fct=tf.nn.relu , output_activation=tf.nn.softmax,
-                         batch_size=100, initializer=xavier_init , mode = mode ,negative_sampling_loss =True  )
+                         batch_size=100, initializer=xavier_init )
 
         Model = train_the_model(vae)
             
