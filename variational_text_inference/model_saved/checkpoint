@@ -1,6 +1,0 @@
-model_checkpoint_path: "/home/ubuntu/Deep-Learning-Projects/variational_text_inference/save_my_model/NVDM-1000"
-all_model_checkpoint_paths: "/home/ubuntu/Deep-Learning-Projects/variational_text_inference/save_my_model/NVDM-600"
-all_model_checkpoint_paths: "/home/ubuntu/Deep-Learning-Projects/variational_text_inference/save_my_model/NVDM-700"
-all_model_checkpoint_paths: "/home/ubuntu/Deep-Learning-Projects/variational_text_inference/save_my_model/NVDM-800"
-all_model_checkpoint_paths: "/home/ubuntu/Deep-Learning-Projects/variational_text_inference/save_my_model/NVDM-900"
-all_model_checkpoint_paths: "/home/ubuntu/Deep-Learning-Projects/variational_text_inference/save_my_model/NVDM-1000"
