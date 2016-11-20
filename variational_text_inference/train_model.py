@@ -43,10 +43,19 @@ def train_the_model(vae):
         # Loop over all batches
         batch_id = 0
         for batch_ in batch_data:
+
             batch_id += 1
             collected_data = [chunks for chunks in batch_]
             batch_xs , mask_xs , mask_negative  = A._bag_of_words(collected_data)
-            _ , total_cost , recons_loss_ , kld  = vae.partial_fit(batch_xs , batch_xs.shape[0] , mask_xs)
+            
+
+            feed_dict = {vae.X: batch_xs , vae.dynamic_batch_size:batch_xs.shape[0],
+                                            vae.MASK:mask_xs}
+
+            _ , total_cost , recons_loss_ , kld    = vae.SESS.run((vae.optimizer, vae.cost , vae.reconstr_loss , vae.kld), 
+                                                      feed_dict= feed_dict)
+
+            
 
             word_count = np.sum(mask_xs)
             batch_loss = np.sum(total_cost)/word_count
@@ -54,10 +63,8 @@ def train_the_model(vae):
             kld_sum += np.sum(kld)
             
 
-            print ("Batch Id {} , Loss {} , Kld is {}  ".format(batch_id , batch_loss, np.sum(kld)))
-            print ("Loss sum" , loss_sum)
-            print ("Kld " , kld_sum/total_batch)
-        break
+            print (" Epoch {} Batch Id {} , Loss {} , Kld is {}  ".format(epoch+1 , batch_id , batch_loss, np.sum(kld)))
+        
         print_ppx = loss_sum
         print_kld = kld_sum/total_batch
         print('| Epoch train: {:d} |'.format(epoch+1), 
@@ -65,6 +72,7 @@ def train_the_model(vae):
                '| KLD: {:.5}'.format(print_kld))
         if epoch % save_step == 0:
             save_model(vae , model_name =  type(vae).__name__ , global_step = epoch)
+
 
     return vae
 
@@ -75,16 +83,15 @@ if __name__ == "__main__":
     twenty_train = fetch_20newsgroups(subset='train')   
     data_ = twenty_train.data
     print "Download 20 news group data completed"
-    A = TextLoader(data_)
+    A = TextLoader(data_ , min_count = 25)
     batch_size = 100
         # restricting memory usage, TensorFlow is greedy and will use all memory otherwise
-    gpu_opts = tf.GPUOptions(per_process_gpu_memory_fraction=0.6)
+    gpu_opts = tf.GPUOptions(per_process_gpu_memory_fraction=0.9)
     # initialize the Session
 
     with tf.Session(config=tf.ConfigProto(gpu_options=gpu_opts)) as sess:
-        mode = 'negative'
         vae = NVDM(sess , len(A.vocab), 50, [500 , 500] ,  
-                         transfer_fct=tf.nn.relu , output_activation=tf.nn.softmax,
+                         transfer_fct=tf.nn.tanh , output_activation=tf.nn.softmax,
                          batch_size=100, initializer=xavier_init )
 
         Model = train_the_model(vae)

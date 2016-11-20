@@ -1,6 +1,7 @@
 from preprocess import pre_process_sentence
 import numpy as np
 from numpy import random
+from collections import Counter
 
 from itertools import islice, chain
 
@@ -8,11 +9,12 @@ from itertools import islice, chain
         
 class TextLoader():
     
-    def __init__(self , text_list):
+    def __init__(self , text_list , min_count = 10):
         
         if isinstance(text_list, list):
             self.data = text_list
         
+        self.min_count = min_count
         self.vocab = {}
         self.voc_to_idx = []
         self.vocab_inverse = {}
@@ -66,14 +68,18 @@ class TextLoader():
         
         count = 0
         self.data_index = []
+        self.temp_store = []
         for text_ in iter(self.data):
             preprocessed = self._preprocess(text_)
             if preprocessed:
                 self.data_index.append(count)
                 count += 1
-                for w in list(set(preprocessed)):
-                    if w not in self.vocab:
-                        self.vocab[w] = len(self.vocab) 
+                self.temp_store.extend(preprocessed)
+
+        counter = Counter(self.temp_store)
+        words = [k for k, v in counter.iteritems() if v > self.min_count]
+        self.vocab = dict(zip(words , range(len(words))))
+        self.temp_store = [] 
         
 
     def _vocab_inverse(self):
@@ -132,7 +138,8 @@ if __name__ == "__main__":
     twenty_train = fetch_20newsgroups(subset='train')   
     data_ = twenty_train.data
     print "Download 20 news group data completed"
-    A = TextLoader(data_)
+    A = TextLoader(data_ , min_count = 27)
+    print len(A.vocab)
     batch_size = 100
     batch_data = A.get_batch(batch_size)
 

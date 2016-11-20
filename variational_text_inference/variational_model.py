@@ -114,6 +114,8 @@ class NVDM(object):
                         tf.mul(tf.exp(self.z_log_sigma_sq), eps))
         self.X_reconstruction_mean = self._generator_network(self.Weights_generator , self.Biases_generator)
 
+        
+
     def _encoder_network(self, weights, biases):
         # Generate probabilistic encoder (recognition network), which
         # maps inputs onto a normal distribution in latent space.
@@ -161,7 +163,7 @@ class NVDM(object):
                                      biases['out_mean']))
                
             else:
-                x_reconstr_mean = tf.add((tf.matmul(self.z, weights['out_mean'])), 
+                x_reconstr_mean = tf.add(-1*(tf.matmul(self.z, weights['out_mean'])), 
                                      biases['out_mean'])
 
             return x_reconstr_mean
@@ -169,17 +171,21 @@ class NVDM(object):
     def _create_loss_optimizer(self):
        
 
-        reconstr_loss = tf.mul( tf.nn.log_softmax(self.X_reconstruction_mean) , self.MASK)
+        logits = tf.log(tf.nn.softmax(self.X_reconstruction_mean)+0.0001)
+        self.reconstr_loss  = -tf.reduce_sum(tf.mul(logits, self.X), 1)
 
-        self.reconstr_loss = reconstr_loss = -tf.reduce_sum(reconstr_loss, 1)
-    
-        self.kld  = kld = -0.5 * tf.reduce_sum(1 + self.z_log_sigma_sq 
-                                           - tf.square(self.z_mean) 
-                                           - tf.exp(self.z_log_sigma_sq), 1)
-        self.cost = reconstr_loss + kld   # average over batch
+        # logits = tf.nn.log_softmax(self.X_reconstruction_mean)
+
+        # self.reconstr_loss  = -tf.reduce_sum(tf.mul(logits, self.X), 1)
+        
+        self.kld = -0.5 * tf.reduce_sum(1 - tf.square(self.z_mean) + 2 * self.z_log_sigma_sq - tf.exp(2 * self.z_log_sigma_sq), 1)
+        
+        self.cost = self.reconstr_loss + self.kld   # average over batch
         # Use ADAM optimizer
 
         self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.cost)
+
+        
 
         #### Local Clipping
             # self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
