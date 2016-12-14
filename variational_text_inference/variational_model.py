@@ -14,7 +14,6 @@ class NVDM(object):
     
     '''
     NVDM Model - as described in Neural Variational Inference for Text Processing
-
     '''
 
     
@@ -236,5 +235,3 @@ class NVDM(object):
     
     
     
-
-
